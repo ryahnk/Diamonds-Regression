@@ -1,0 +1,247 @@
+---
+title: "Exploring Regression Techniques - Diamonds Dataset"
+author: "Ryan Yahnker"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(faraway)
+library(MASS)
+library(dplyr)
+library(knitr)
+```
+
+# Set Up
+
+Need to read the dataset, reclassify categorical variables, sample the data, and check that everything has been done correctly.
+```{r}
+diamonds <- read.csv('Diamonds Prices2022.csv')
+head(diamonds)
+summary(diamonds)
+
+diamonds$cut = factor(diamonds$cut,
+                      levels = c('Fair', 'Good', 'Very Good', 'Premium', 'Ideal'))
+diamonds$color = factor(diamonds$color,
+                        levels = c('D', 'E', 'F', 'G', 'H', 'I', 'J'))
+diamonds$clarity = factor(diamonds$clarity, 
+                          levels = c('I1', 'SI2', 'SI1', 'VS2', 'VS1', 'VVS2', 'VVS1', 'IF'))
+
+set.seed(101)
+
+sample_diamonds <- diamonds[sample(1:nrow(diamonds), size = 500, replace = FALSE), ]
+str(sample_diamonds)
+```
+
+# Regression
+
+Now we look to fit a linear regression model removing x, y, and z variables due to high correlation with carat variable. 
+
+We will use price as our dependent variable. 
+```{r}
+diamonds_model <- lm(price ~ depth + cut + carat + color + table, data = sample_diamonds) 
+summary(diamonds_model)
+```
+
+## Checking for multicollinearity (VIF & Condition Index)
+
+Now that we have fit a model we need to check and adjust the model as need to find the best regression line. 
+
+First, we will check for multicollinearity. One way we can explore this is by calculating the Variance inflation factor (VIF).
+
+Calculating VIF using R, we will use the vif function in the faraway library.
+
+```{r}
+vif_data <- faraway::vif(diamonds_model)
+vif_values <- data.frame(
+  Coefficient=names(vif_data),
+  VIF=as.numeric(vif_data)
+)
+kable(vif_values)
+```
+
+We can see that the VIF of cutIdeal has a value over 10, which suggests that there could exist multicollinearity.
+However, this variable is a dummy variable, so this is not a cause for concern. 
+
+We will now look at other ways to explore multicollinearity in our model.
+
+Another way is using condition index. The square root of the largest eigen value divided by the smallest eigen value 
+gives us the condition number. When this number is larger than 30, there could be multicollinearity.
+
+For this we will to use the correlation matrix from our regression equation.
+
+```{r}
+diamonds_matrix <- model.matrix(diamonds_model)[,-1]
+diamonds_corr <- cor(diamonds_matrix)
+eigenvalue <- eigen(diamonds_corr)$values
+coefficient_names <- colnames(diamonds_matrix)
+condition_index <- sqrt(max(eigenvalue)/eigenvalue)
+CI_df <- data.frame(Coefficiant=coefficient_names, CI=condition_index)
+kable(CI_df)
+```
+
+We can see here that there are no values over 30, so we will explore other options for testing our model.
+
+## Stepwise Elemination
+
+We will now use stepwise elimination to identify the most relevant predictors for the model.
+
+These methods help to avoid overfitting leaving out predictors that are not significantly increasing the accuracy of the model. 
+
+We will check both forward and backward stepwise elimination to see if we get the same result. We will use a k value of 2, because this is the standard k value for minimizing prediction error in models.
+
+```{r}
+#backwards stepwise
+diamonds_stepB <- stepAIC(diamonds_model, direction="backward", k = 2, trace = 0)
+summary(diamonds_stepB)
+```
+
+Backwards stepwise elimination yields a final model includes only the variables cut, carat, and color.
+
+This model appears to be slightly better than our original diamonds_model because the Adjusted R-squared value is slightly higher, with a value of 0.837 rather than 0.8367. This is a minor improvement, but an improvement nonetheless. 
+
+We will now confirm this adjusted model with forward stepwise elimination to see if we get the same result. 
+
+```{r}
+#forward stepwise
+diamonds_stepF <- stepAIC(diamonds_model, direction="forward", k = 2, trace = 0)
+summary(diamonds_stepF)
+```
+
+This yields a different result than backwards stepwise elimination. We will now perform bidirectional stepwise elimination. 
+
+```{r}
+#bidirectional stepwise
+diamonds_step <- stepAIC(diamonds_model, direction="both", k = 2, trace = 0)
+summary(diamonds_step)
+```
+
+Performing bidirectional stepwise elimination returns the same result as backwards stepwise elimination. This suggests that the best model includes only predictors cut, carat, and color. Forward stepwise elimination returns the best model to include only predictors cut, carat, color, and table. 
+
+The inclusion of the table predictor in this model could be due to forward stepwises inability to remove predictors after adding them. If when table was added to the model, it improved the fit then after other predictors are added it weakened the fit, it cannot remove table. 
+
+Backward and bidirectional stepwise elimination are more computationally taxing then forward stepwise elimination, but they generally return better results.
+
+## Cross Validation
+
+We can check if our new model results in less Mean Squared Error using Cross Validation. 
+
+We will do so by creating a CV function, then applying it to our two models to check each models MSE. 
+
+```{r}
+#CV function
+kFoldCV <- function(data, response, formula, k, seed = FALSE, seed_num, shuffle = FALSE) {
+  if (seed == TRUE) {
+    set.seed(seed_num)
+  }
+  if(shuffle == TRUE) {
+    shuffle_index = sample(1:nrow(data), replace = FALSE)
+    data = data[shuffle_index,]
+    response = response[shuffle_index]
+  }
+  folds <- cut(seq(1,nrow(data)),breaks=k,labels=FALSE)
+  mse = numeric()
+  for(i in 1:k){
+    testIndexes <- which(folds == i, arr.ind=TRUE)
+    testData <- data[testIndexes, ]
+    trainData <- data[-testIndexes, ]
+
+    diamonds_model.train = lm(formula, data = trainData)
+    mse[i] = (1/length(testIndexes))*sum((response[testIndexes]
+                                          - predict(diamonds_model.train, newdata = testData))^2)
+  }
+  rmse = sqrt(mse)
+  cv_k_mse = sum(mse)/k
+  cv_k_rmse = sum(rmse)/k
+  return(list(CV_MSE = cv_k_mse, CV_RMSE = cv_k_rmse))
+}
+```
+
+```{r}
+#CV on original model
+kFoldCV(response = diamonds$price, formula =price ~ depth + cut + carat + color + table,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 1)
+```
+
+```{r}
+#CV on new model
+kFoldCV(response = diamonds$price, formula = price ~ cut + carat + color, data = diamonds,
+        k = 10, shuffle = TRUE, seed = TRUE, seed_num = 1)
+```
+
+Cross validation is giving us an interesting result. We can see that MSE for our simplified model is higher than the MSE for our original model.
+
+The results of cross validation pose need for a look into the correlation between depth and price and table and price. 
+
+For this we can use a corr plot. 
+
+```{r}
+#correlation heatmap
+correlation_diamonds <- cor(sample_diamonds %>% dplyr::select_if(is.numeric) %>% 
+                              dplyr::select(-X, -x, -y, -z, -carat))
+
+corrplot(correlation_diamonds, method="color", 
+         col=colorRampPalette(c("green", "white", "red"))(200),
+         type="upper", tl.col="black", tl.srt=45, addCoef.col = "black")
+```
+
+```{r}
+#pairs plot
+pairs(sample_diamonds[, c('table', 'depth', 'price')])
+```
+
+It appears that neither table, depth, or price are significantly correlated. It seems strange that MSE increases when they are removed from the model. 
+
+It is possible the seed used is giving an unlucky result. Since the MSE increase is strange, let's explore other seeds.
+
+```{r}
+kFoldCV(response = diamonds$price, formula =price ~ depth + cut + carat + color + table,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 43)
+
+kFoldCV(response = diamonds$price, formula =price ~ cut + carat + color,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 43)
+
+```
+
+```{r}
+kFoldCV(response = diamonds$price, formula =price ~ depth + cut + carat + color + table,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 713)
+
+kFoldCV(response = diamonds$price, formula =price ~ cut + carat + color,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 713)
+
+```
+
+```{r}
+kFoldCV(response = diamonds$price, formula =price ~ depth + cut + carat + color + table,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 123)
+
+kFoldCV(response = diamonds$price, formula =price ~ cut + carat + color,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 123)
+
+```
+
+```{r}
+kFoldCV(response = diamonds$price, formula =price ~ depth + cut + carat + color + table,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 600493)
+
+kFoldCV(response = diamonds$price, formula =price ~ cut + carat + color,
+        data = diamonds, k = 10, shuffle = TRUE, seed = TRUE, seed_num = 600493)
+
+```
+
+## Conclusion
+
+After trying multiple seeds, the result is showing the same. It is still possible this is a sampling error, since there is not significant correlation between price, table, and depth. For now we will assume there is a sampling error and conclude that a model with only the predictors cut, carat, and color is better due to a larger adjusted \( R^2 \) value. 
+
+
+
+
+
+
+
+
+
+
