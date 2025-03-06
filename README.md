@@ -50,7 +50,7 @@ We will now attempt to improve our model through stepwise elimination. We will d
 <img width="750" alt="image" src="https://github.com/user-attachments/assets/a7d40f20-566f-4e17-ad48-9d2f595eae2f" />
 
 Performing bidirectional stepwise elimination returns the same result as backwards stepwise elimination. 
-This suggests that the best model includes only predictors cut, carat, and color. Forward stepwise elimination returns the best model to include only predictors cut, carat, color, and table. 
+This suggests that the a better includes only predictors cut, carat, and color. Forward stepwise elimination returns the best model to include only predictors cut, carat, color, and table. 
 
 The inclusion of the table predictor in this model could be due to forward stepwises inability to remove predictors after adding them. 
 If when table was added to the model, it improved the fit then after other predictors are added it weakened the fit, it cannot remove table. 
@@ -93,11 +93,11 @@ Stepwise elimination returns a reduced linear model with an improved adjusted $R
 This suggests that the original model better represents the data, a conclusion that conflicts with the results of stepwise elimination. 
 It's possible that this strange result of cross validation is due to a sampling error. The seed used could be responsible for these results. 
 
-However, after trying multiple seeds, the result is the same. The original MSE is lower than the reduced model. 
-If anyone has other ideas to explain the lower MSE with the original model, I would love to explore it further. 
+After trying multiple seeds, the result is showing the same. This suggests that increase in MSE with the reduced model is likely not resulting from an unlucky seed number. The adjusted $R^2$ value only increases by a very marginal amount (`0.0003`) when removing the predictor table from the model suggesting the reduced model does not substantially improve variance explanation. Additionally, the reduced model has a greater MSE than our original model suggesting the reduced model sacrifices prediction accuracy and the does not generalize to new data as well as the original model. Therefore, we conclude that the original model (with predictors cut, carat, color, and table) performs better than the reduced model.
 
-It is still possible this is a sampling error, since there is not significant correlation between price, table, and depth. 
-For now we will assume there is a sampling error and conclude that a model with only the predictors cut, carat, and color is better due to a larger adjusted $R^2$ value.
+We could further our model selection using alternative strategies such as LASSO Regression and Cross-Validation-Based Feature Selection (i.e. Recursive Feature Elimination). LASSO Regression would reduce our risk of overfitting through regularization and automatically performs feature selection to find the best model, although it is more computationally expensive than Stepwise Elimination. Cross-Validation-Based Feature Selection would select the best model based on the test error of the model, however, it is computationally expensive which would not be optimal for data this size. Both of these model selection strategies would provide more consistent results than the Stepwise Elimination we used previously. 
+
+It would be worth considering the results of LASSO Regression and comparing them to the results of the Stepwise Elimination performed on our Linear Regression Model.  
 
 
 
