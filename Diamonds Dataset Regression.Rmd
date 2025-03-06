@@ -14,7 +14,7 @@ library(dplyr)
 library(knitr)
 ```
 
-# Set Up
+### Set Up
 
 Need to read the dataset, reclassify categorical variables, sample the data, and check that everything has been done correctly.
 ```{r}
@@ -118,9 +118,9 @@ diamonds_step <- stepAIC(diamonds_model, direction="both", k = 2, trace = 0)
 summary(diamonds_step)
 ```
 
-Performing bidirectional stepwise elimination returns the same result as backwards stepwise elimination. This suggests that the best model includes only predictors cut, carat, and color. Forward stepwise elimination returns the best model to include only predictors cut, carat, color, and table. 
+Performing bidirectional stepwise elimination returns the same result as backwards stepwise elimination. This suggests that a better model includes only predictors cut, carat, and color. Forward stepwise elimination returns the best model to include only predictors cut, carat, color, and table. 
 
-The inclusion of the table predictor in this model could be due to forward stepwises inability to remove predictors after adding them. If when table was added to the model, it improved the fit then after other predictors are added it weakened the fit, it cannot remove table. 
+The inclusion of the table predictor in this model could be due to forward stepwise's inability to remove predictors after adding them. If when table was added to the model, it improved the fit then after other predictors are added it weakened the fit, it cannot remove table. 
 
 Backward and bidirectional stepwise elimination are more computationally taxing then forward stepwise elimination, but they generally return better results.
 
@@ -232,11 +232,13 @@ kFoldCV(response = diamonds$price, formula =price ~ cut + carat + color,
 
 ```
 
-## Conclusion
+# Conclusion
 
-After trying multiple seeds, the result is showing the same. It is still possible this is a sampling error, since there is not significant correlation between price, table, and depth. For now we will assume there is a sampling error and conclude that a model with only the predictors cut, carat, and color is better due to a larger adjusted \( R^2 \) value. 
+After trying multiple seeds, the result is showing the same. This suggests that increase in MSE with the reduced model is likely not resulting from an unlucky seed number. The adjusted \( R^2 \) value only increases by a very marginal amount (`0.0003`) when removing the predictor table from the model suggesting the reduced model does not substantially improve variance explanation. Additionally, the reduced model has a greater MSE than our original model suggesting the reduced model sacrifices prediction accuracy and the does not generalize to new data as well as the original model. Therefore, we conclude that the original model (with predictors cut, carat, color, and table) performs better than the reduced model.
 
+We could further our model selection using alternative strategies such as LASSO Regression and Cross-Validation-Based Feature Selection (i.e. Recursive Feature Elimination). LASSO Regression would reduce our risk of overfitting through regularization and automatically performs feature selection to find the best model, although it is more computationally expensive than Stepwise Elimination. Cross-Validation-Based Feature Selection would select the best model based on the test error of the model, however, it is computationally expensive which would not be optimal for data this size. Both of these model selection strategies would provide more consistent results than the Stepwise Elimination we used previously. 
 
+It would be worth considering the results of LASSO Regression and comparing them to the results of the Stepwise Elimination performed on our Linear Regression Model.  
 
 
 
